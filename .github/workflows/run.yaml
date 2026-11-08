@@ -1,0 +1,88 @@
+name: Model Training CICD
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  model-training:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Step 1: Checkout Repository
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Step 2: Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Step 3: Setup CML
+      - name: Setup CML
+        uses: iterative/setup-cml@v2
+
+      # Step 4: Install Dependencies
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Step 5: Train Logistic Regression Model
+      - name: Train Model
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python train_model.py
+
+      # Step 6: Generate Model Report
+      - name: Generate Report
+        run: |
+          echo "# Model Training Report" > report.md
+
+          echo "## Logistic Regression" >> report.md
+
+          echo "### Model Scores" >> report.md
+
+          if [ -f scores.txt ]; then
+            cat scores.txt >> report.md
+          fi
+
+          echo "### Confusion Matrix" >> report.md
+          echo "![Confusion Matrix](./ConfusionMatrix.png)" >> report.md
+
+          if [ -f FeatureImportance.png ]; then
+            echo "### Feature Importance" >> report.md
+            echo "![Feature Importance](./FeatureImportance.png)" >> report.md
+          fi
+
+      # Step 7: Publish CML Report on Pull Request
+      - name: Publish CML Report
+        if: github.event_name == 'pull_request'
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cml comment create report.md
+
+      # Step 8: Upload Model Results
+      - name: Upload Model Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-training-results
+          path: |
+            ConfusionMatrix.png
+            FeatureImportance.png
+            scores.txt
+            report.md
+          if-no-files-found: warn
